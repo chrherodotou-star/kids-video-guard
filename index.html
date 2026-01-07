@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KidsVideo Guard | Quality Assessor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root { --primary: #4A90E2; --secondary: #6FCF97; --bg: #F8FAFC; --text: #334155; --danger: #FF6B6B; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1fr 320px; gap: 25px; }
+        
+        /* Layout Components */
+        .main-panel { background: white; padding: 35px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .side-panel { background: white; padding: 20px; border-radius: 20px; border: 1px solid #E2E8F0; height: fit-content; }
+        
+        /* Elements */
+        h1 { color: var(--primary); margin-bottom: 5px; }
+        .input-group { display: flex; gap: 10px; margin: 25px 0; }
+        input { flex: 1; padding: 15px; border: 2px solid #E2E8F0; border-radius: 12px; font-size: 16px; }
+        button { background: var(--primary); color: white; border: none; padding: 15px 25px; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button.secondary { background: var(--secondary); margin-top: 10px; width: 100%; }
+        button.compare { background: #6B46C1; width: 100%; margin-top: 10px; }
+        
+        /* Results Styling */
+        #results { display: none; margin-top: 30px; border-top: 2px solid #F1F5F9; padding-top: 25px; }
+        .video-preview { width: 100%; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .score-display { text-align: center; background: #F0FDF4; padding: 25px; border-radius: 15px; margin-bottom: 25px; }
+        .score-num { font-size: 54px; font-weight: 800; color: var(--secondary); margin: 0; }
+        
+        /* Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th { background: #F8FAFC; text-align: left; padding: 12px; border-bottom: 2px solid #E2E8F0; }
+        td { padding: 12px; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
+
+        /* History */
+        .history-item { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid #F1F5F9; cursor: pointer; border-radius: 8px; margin-bottom: 5px; }
+        .history-item:hover { background: #F8FAFC; }
+        .history-thumb { width: 60px; height: 40px; border-radius: 4px; object-fit: cover; }
+        .history-info { flex: 1; font-size: 12px; }
+        .checkbox-custom { width: 18px; height: 18px; }
+
+        #loader { display: none; text-align: center; padding: 20px; font-weight: bold; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="main-panel">
+        <h1>KidsVideo Guard</h1>
+        <p>Expert developmental assessment for YouTube content.</p>
+
+        <div class="input-group">
+            <input type="text" id="videoUrl" placeholder="Paste YouTube link here...">
+            <button onclick="analyzeVideo()">Analyze Video</button>
+        </div>
+
+        <div id="loader">🔄 Gemini is analyzing the video... Please wait.</div>
+
+        <div id="results">
+            <img id="resThumb" src="" class="video-preview">
+            <div class="score-display">
+                <p style="margin:0; font-weight:600; color:#64748b;">TOTAL QUALITY SCORE</p>
+                <h2 class="score-num" id="displayScore">0/34</h2>
+                <p id="displayPercent" style="font-weight:bold;"></p>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <button class="secondary" onclick="downloadPDF()">📥 Download Parent Guide (PDF)</button>
+            </div>
+
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th style="width:30%">Criterion</th>
+                        <th style="width:55%">Assessment</th>
+                        <th style="width:15%">Score</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="side-panel">
+        <h3>Recent Checks</h3>
+        <p style="font-size: 11px; color: #94a3b8; margin-bottom: 15px;">Select two to compare</p>
+        <div id="historyList"></div>
+        <button class="compare" onclick="compareVideos()">Compare Selected</button>
+        <button style="background:none; color:var(--danger); font-size:12px; margin-top:20px;" onclick="clearHistory()">Clear History</button>
+    </div>
+</div>
+
+<script>
+    let history = JSON.parse(localStorage.getItem('kvg_history')) || [];
+    renderHistory();
+
+    function getYoutubeID(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    async function analyzeVideo() {
+        const url = document.getElementById('videoUrl').value;
+        const vidId = getYoutubeID(url);
+        if (!vidId) return alert("Please enter a valid YouTube URL");
+
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('results').style.display = 'none';
+
+        try {
+            // Vercel backend endpoint
+            const response = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
+            
+            const data = await response.json();
+            
+            const resultObj = {
+                id: vidId,
+                url: url,
+                score: data.totalScore,
+                percent: ((data.totalScore / 34) * 100).toFixed(1),
+                details: data.details, // AI returns a list of criteria/scores
+                date: new Date().toLocaleDateString()
+            };
+
+            saveToHistory(resultObj);
+            displayUI(resultObj);
+        } catch (e) {
+            alert("Error connecting to AI. Make sure your API key is set in Vercel!");
+        } finally {
+            document.getElementById('loader').style.display = 'none';
+        }
+    }
+
+    function displayUI(data) {
+        document.getElementById('results').style.display = 'block';
+        document.getElementById('resThumb').src = `https://img.youtube.com/vi/${data.id}/mqdefault.jpg`;
+        document.getElementById('displayScore').innerText = `${data.score}/34`;
+        document.getElementById('displayPercent').innerText = `${data.percent}% Quality Rating`;
+        
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = data.details.map(d => `
+            <tr>
+                <td><b>${d.criterion}</b></td>
+                <td>${d.assessment}</td>
+                <td style="font-weight:bold; color:var(--primary)">${d.score}</td>
+            </tr>
+        `).join('');
+    }
+
+    function saveToHistory(item) {
+        history.unshift(item);
+        if(history.length > 10) history.pop();
+        localStorage.setItem('kvg_history', JSON.stringify(history));
+        renderHistory();
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('historyList');
+        if (history.length === 0) {
+            list.innerHTML = '<p style="color:#94a3b8; font-size:13px;">No videos analyzed yet.</p>';
+            return;
+        }
+        list.innerHTML = history.map((item, index) => `
+            <div class="history-item">
+                <input type="checkbox" class="checkbox-custom" data-index="${index}">
+                <img src="https://img.youtube.com/vi/${item.id}/default.jpg" class="history-thumb">
+                <div class="history-info" onclick="displayUI(history[${index}])">
+                    <strong>Score: ${item.score}/34</strong><br>
+                    <span style="color:#94a3b8">${item.date}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function clearHistory() {
+        localStorage.removeItem('kvg_history');
+        history = [];
+        renderHistory();
+    }
+
+    function downloadPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.text("KidsVideo Guard Assessment Report", 14, 20);
+        doc.autoTable({ html: '#resultsTable', startY: 30 });
+        doc.save("Video_Assessment.pdf");
+    }
+
+    function compareVideos() {
+        const selectedIndices = Array.from(document.querySelectorAll('.checkbox-custom:checked'))
+                                    .map(cb => cb.dataset.index);
+        if (selectedIndices.length !== 2) return alert("Select exactly 2 videos to compare");
+        
+        const v1 = history[selectedIndices[0]];
+        const v2 = history[selectedIndices[1]];
+        
+        // Logical comparison view
+        alert(`Comparing ${v1.score}/34 vs ${v2.score}/34. In a real app, this opens a side-by-side table.`);
+    }
+</script>
+
+</body>
+</html>
