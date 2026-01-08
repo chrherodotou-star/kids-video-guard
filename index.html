@@ -1,108 +1,36 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KidsVideo Guard | AI Safety Checker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .loader { border-top-color: #3498db; animation: spinner 1.5s linear infinite; }
-        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
-</head>
-<body class="bg-gray-50 min-h-screen font-sans">
+async function analyzeVideo() {
+    const urlInput = document.getElementById('videoUrl').value;
+    const resultArea = document.getElementById('resultArea');
+    const loading = document.getElementById('loading');
+    const aiReason = document.getElementById('aiReason');
+    
+    // UI Reset
+    resultArea.classList.add('hidden');
+    loading.classList.remove('hidden');
 
-    <div class="max-w-4xl mx-auto py-12 px-4">
-        <header class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-blue-600 mb-2">🛡️ KidsVideo Guard</h1>
-            <p class="text-gray-600">Enter a YouTube link to check if it's safe for children.</p>
-        </header>
+    try {
+        const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: urlInput })
+        });
 
-        <div class="bg-white p-6 rounded-xl shadow-md mb-8">
-            <div class="flex flex-col md:flex-row gap-4">
-                <input type="text" id="videoUrl" placeholder="https://www.youtube.com/watch?v=..." 
-                    class="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                <button onclick="analyzeVideo()" id="btnText"
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-all">
-                    Analyze Video
-                </button>
-            </div>
-        </div>
+        const data = await response.json();
 
-        <div id="loading" class="hidden flex flex-col items-center py-10">
-            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
-            <p class="text-blue-600 font-medium">AI is watching the video... please wait.</p>
-        </div>
-
-        <div id="resultArea" class="hidden bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-            <div class="md:flex">
-                <div class="md:w-1/3 bg-gray-100 flex items-center justify-center p-4">
-                    <img id="thumb" src="" alt="Thumbnail" class="rounded-lg shadow-sm">
-                </div>
-                <div class="md:w-2/3 p-6">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">Analysis Results</h2>
-                    <table class="w-full text-left border-collapse">
-                        <tr class="border-b">
-                            <th class="py-2 text-gray-500 font-medium">Safety Status</th>
-                            <td id="safetyVerdict" class="py-2 font-bold">Checking...</td>
-                        </tr>
-                        <tr>
-                            <th class="py-2 text-gray-500 font-medium align-top">AI Reasoning</th>
-                            <td id="aiReason" class="py-2 text-gray-700 leading-relaxed italic">Analysis text goes here.</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function getThumbnail(url) {
-            const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-            const match = url.match(regExp);
-            return (match && match[2].length == 11) ? `https://img.youtube.com/vi/${match[2]}/mqdefault.jpg` : null;
-        }
-
-        async function analyzeVideo() {
-            const urlInput = document.getElementById('videoUrl').value;
-            const resultArea = document.getElementById('resultArea');
-            const loading = document.getElementById('loading');
+        if (data.analysis) {
+            // Display Thumbnail
+            document.getElementById('thumb').src = getThumbnail(urlInput);
             
-            if(!urlInput) return alert("Please paste a link first!");
-
-            // Reset UI
-            resultArea.classList.add('hidden');
-            loading.classList.remove('hidden');
-
-            try {
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ url: urlInput })
-                });
-
-                const data = await response.json();
-
-                if (data.analysis) {
-                    document.getElementById('thumb').src = getThumbnail(urlInput);
-                    
-                    // Determine safety color
-                    const isSafe = !data.analysis.toLowerCase().includes("unsafe") && !data.analysis.toLowerCase().includes("danger");
-                    const verdictElement = document.getElementById('safetyVerdict');
-                    verdictElement.innerText = isSafe ? "✅ LIKELY SAFE" : "⚠️ CAUTION ADVISED";
-                    verdictElement.className = isSafe ? "py-2 font-bold text-green-600" : "py-2 font-bold text-red-600";
-                    
-                    document.getElementById('aiReason').innerText = data.analysis;
-                    resultArea.classList.remove('hidden');
-                } else {
-                    alert("Error: " + (data.error || "Check Vercel Logs"));
-                }
-            } catch (err) {
-                alert("Connection failed! Make sure your API key is correct.");
-            } finally {
-                loading.classList.add('hidden');
-            }
+            // Render the HTML table from the AI
+            aiReason.innerHTML = data.analysis.replace(/```html|```/g, "");
+            
+            resultArea.classList.remove('hidden');
+        } else {
+            alert("AI Error: " + (data.error || "No response"));
         }
-    </script>
-</body>
-</html>
+    } catch (err) {
+        alert("Network Error: Make sure your Vercel deployment is green.");
+    } finally {
+        loading.classList.add('hidden');
+    }
+}
