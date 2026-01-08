@@ -4,32 +4,32 @@ async function analyzeVideo() {
     const loading = document.getElementById('loading');
     const aiReason = document.getElementById('aiReason');
     
-    // UI Reset
+    if(!urlInput) return alert("Please paste a link!");
+
     resultArea.classList.add('hidden');
     loading.classList.remove('hidden');
 
     try {
         const response = await fetch('/api/analyze', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: urlInput })
         });
 
         const data = await response.json();
 
         if (data.analysis) {
-            // Display Thumbnail
-            document.getElementById('thumb').src = getThumbnail(urlInput);
+            document.getElementById('thumb').src = `https://img.youtube.com/vi/${urlInput.split('v=')[1]?.split('&')[0]}/mqdefault.jpg`;
             
-            // Render the HTML table from the AI
-            aiReason.innerHTML = data.analysis.replace(/```html|```/g, "");
+            // Clean markdown and render as HTML
+            let cleanHtml = data.analysis.replace(/```html|```/g, "");
+            aiReason.innerHTML = `<div class='prose max-w-none'>${cleanHtml}</div>`;
             
             resultArea.classList.remove('hidden');
         } else {
-            alert("AI Error: " + (data.error || "No response"));
+            alert("Error: " + (data.error || "Unknown error"));
         }
     } catch (err) {
-        alert("Network Error: Make sure your Vercel deployment is green.");
+        alert("Failed to connect to backend.");
     } finally {
         loading.classList.add('hidden');
     }
