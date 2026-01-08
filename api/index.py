@@ -10,22 +10,12 @@ API_KEY = os.environ.get("GOOGLE_API_KEY")
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
-# THE SYSTEM PROMPT WITH YOUR 18 CRITERIA
-SYSTEM_PROMPT = """
-You are an expert in early childhood education. Analyze the provided YouTube video based on these 18 criteria:
-1. Easy for child to imitate. 2. Realistic/Relatable. 3. Positive behaviors modeled. 
-5. Social relationships positive. 6. Encourages creativity. 7. Encourages active repetition. 
-8. Easy dialogue. 9. No multiple scenes/distractions. 10. Concepts repeated. 
-11. Unhurried pace. 12. Interactive elements. 13. Narration/Visuals complement. 
-14. Conversational style. 15. Learning elements highlighted. 16. Supports cognitive development. 
-17. Supports physical development. 18. Supports socio-emotional development.
-
-OUTPUT REQUIREMENTS:
-- Present findings in an HTML table with columns: [Criterion, Assessment, Score, Justification].
-- Scoring: No (0 points), Partial (1 point), Yes (2 points).
-- If unsure, state "I am not certain" in Justification.
-- After the table, provide: "Final Score: [Total]/34" and "Percentage: [X]%".
-- Return ONLY the HTML code for the table and the final score text.
+# We store the criteria as a clean string to avoid encoding errors
+CRITERIA = """
+1. Easy to imitate. 2. Realistic/Relatable. 3. Positive behaviors. 5. Social relationships. 
+6. Creativity. 7. Active Repetition. 8. Easy dialogue. 9. No distractions. 10. Important concepts repeated. 
+11. Unhurried pace. 12. Interactive. 13. Narration/Visuals complement. 14. Conversational style. 
+15. Learning Elements Highlighted. 16. Cognitive Dev. 17. Physical Dev. 18. Socio-Emotional Dev.
 """
 
 @app.route('/api/analyze', methods=['POST'])
@@ -35,14 +25,19 @@ def analyze():
         video_url = data.get("url")
         
         if not API_KEY:
-            return jsonify({"error": "API Key missing"}), 500
+            return jsonify({"error": "Key missing in Vercel settings"}), 500
 
         model = genai.GenerativeModel('gemini-1.5-flash')
-        # We combine the system prompt with the specific video URL
-        full_prompt = f"{SYSTEM_PROMPT}\n\nVideo to analyze: {video_url}"
         
-        response = model.generate_content(full_prompt)
+        prompt = (
+            f"Watch this video: {video_url}. Assess it against these criteria: {CRITERIA}. "
+            "Present findings in an HTML table with columns: Criterion, Assessment, Score (0,1,2), and Justification. "
+            "Calculate a final score out of 34 and a percentage. Return ONLY the HTML table and score."
+        )
         
+        response = model.generate_content(prompt)
+        
+        # Ensure we return a key named "analysis"
         return jsonify({"analysis": response.text})
 
     except Exception as e:
