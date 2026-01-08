@@ -104,40 +104,24 @@
     }
 
     async function analyzeVideo() {
-        const url = document.getElementById('videoUrl').value;
-        const vidId = getYoutubeID(url);
-        if (!vidId) return alert("Please enter a valid YouTube URL");
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = "Analyzing... please wait."; // Feedback for the user
 
-        document.getElementById('loader').style.display = 'block';
-        document.getElementById('results').style.display = 'none';
+    const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ url: document.getElementById('videoUrl').value })
+    });
 
-        try {
-            // Vercel backend endpoint
-            const response = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
-            });
-            
-            const data = await response.json();
-            
-            const resultObj = {
-                id: vidId,
-                url: url,
-                score: data.totalScore,
-                percent: ((data.totalScore / 34) * 100).toFixed(1),
-                details: data.details, // AI returns a list of criteria/scores
-                date: new Date().toLocaleDateString()
-            };
+    const data = await response.json();
 
-            saveToHistory(resultObj);
-            displayUI(resultObj);
-        } catch (e) {
-            alert("Error connecting to AI. Make sure your API key is set in Vercel!");
-        } finally {
-            document.getElementById('loader').style.display = 'none';
-        }
+    if (data.analysis) {
+        // This puts the AI's actual words into your table/results
+        resultDiv.innerHTML = `<strong>Safety Report:</strong> ${data.analysis}`;
+    } else {
+        resultDiv.innerHTML = `Error: ${data.error || "Something went wrong"}`;
     }
+}
 
     function displayUI(data) {
         document.getElementById('results').style.display = 'block';
