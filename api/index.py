@@ -27,3 +27,4 @@ def analyze():
 # Vercel needs this to run
 def handler(event, context):
     return app(event, context)
+
