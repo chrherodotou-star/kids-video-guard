@@ -15,18 +15,28 @@ if api_key:
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
     try:
-        if not api_key:
-            return jsonify({"error": "API Key missing in Vercel settings"}), 500
-            
-        data = request.json
-        video_url = data.get("url")
-        
+        @app.route('/api/analyze', methods=['POST'])
+def analyze():
+    try:
+        video_url = request.json.get("url")
         model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(f"Analyze this video for kids' safety: {video_url}")
         
-        return jsonify({"analysis": response.text})
+        # We ask the AI to give us a structured safety score
+        prompt = f"Analyze this video for kids safety: {video_url}. Give me a safety score out of 10 and a 1-sentence reason."
+        response = model.generate_content(prompt)
+        
+        # 🛡️ THE FIX: This ensures we always return a clean string
+        if response.text:
+            safe_text = response.text
+        else:
+            # Sometimes the AI blocks the response for safety, we handle that here
+            safe_text = "Analysis blocked or unavailable for this video."
+
+        return jsonify({"analysis": safe_text})
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Error: {e}") # This will show up in your Vercel Logs
+        return jsonify({"error": "AI is busy or link is invalid. Try again!"}), 500
 
 # 3. CRITICAL: Vercel's "Secret Handshake"
 # This ensures the 'app' is what Vercel sees as the entry point
